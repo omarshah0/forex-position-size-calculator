@@ -5,6 +5,9 @@ export const fetchForexRates = async (baseCurrency = 'USD') => {
   try {
     const response = await fetch(`${BASE_URL}/${API_KEY}/latest/${baseCurrency}`)
     const data = await response.json()
+    
+    data.conversion_rates['XAU'] = 1950.25 // Example fixed price
+    
     return data.conversion_rates
   } catch (error) {
     console.error('Error fetching forex rates:', error)
@@ -15,11 +18,13 @@ export const fetchForexRates = async (baseCurrency = 'USD') => {
 export const calculateCrossRate = (rates, fromCurrency, toCurrency) => {
   if (!rates) return null
 
-  // If direct USD pair
+  if (fromCurrency === 'XAU' && toCurrency === 'USD') {
+    return rates['XAU']
+  }
+
   if (fromCurrency === 'USD') return rates[toCurrency]
   if (toCurrency === 'USD') return 1 / rates[fromCurrency]
 
-  // For cross pairs
   const fromUsdRate = rates[fromCurrency]
   const toUsdRate = rates[toCurrency]
   

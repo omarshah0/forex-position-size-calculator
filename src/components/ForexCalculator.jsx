@@ -21,6 +21,8 @@ const ForexCalculator = () => {
   const [tradeType, setTradeType] = useState('buy')
   const [forexRates, setForexRates] = useState(null)
 
+  const isGold = pair => pair === 'XAUUSD'
+
   useEffect(() => {
     const loadForexRates = async () => {
       const rates = await fetchForexRates()
@@ -33,17 +35,28 @@ const ForexCalculator = () => {
     const fetchPrice = async () => {
       if (!forexRates) return
 
-      const [baseCurrency, quoteCurrency] = selectedPair.split('/')
-      const rate = calculateCrossRate(forexRates, baseCurrency, quoteCurrency)
+      let rate
+      if (isGold(selectedPair)) {
+        rate = forexRates['XAU'] // Get gold rate in USD
+      } else {
+        const [baseCurrency, quoteCurrency] = selectedPair.split('/')
+        rate = calculateCrossRate(forexRates, baseCurrency, quoteCurrency)
+      }
 
       if (rate) {
         setCurrentPrice(rate)
         setEntryPrice(rate)
 
-        // Set default stop loss (10 pips)
-        const pipValue = quoteCurrency === 'JPY' ? 0.01 : 0.0001
-        const defaultStop =
-          tradeType === 'buy' ? rate - 10 * pipValue : rate + 10 * pipValue
+        // Set default stop loss
+        let defaultStop
+        if (isGold(selectedPair)) {
+          // For gold, use $1 increments
+          defaultStop = tradeType === 'buy' ? rate - 1 : rate + 1
+        } else {
+          const pipValue = selectedPair.includes('JPY') ? 0.01 : 0.0001
+          defaultStop =
+            tradeType === 'buy' ? rate - 10 * pipValue : rate + 10 * pipValue
+        }
         setStopLoss(defaultStop)
       }
     }
@@ -53,44 +66,34 @@ const ForexCalculator = () => {
 
   const calculatePipDistance = () => {
     const priceDifference = Math.abs(entryPrice - stopLoss)
+
+    if (isGold(selectedPair)) {
+      return priceDifference * 10 // Gold is measured in $0.10 increments
+    }
+
     const [, quoteCurrency] = selectedPair.split('/')
-
-    // Convert price difference to pips
     return quoteCurrency === 'JPY'
-      ? priceDifference * 100 // JPY pairs have 2 decimal places
-      : priceDifference * 10000 // Other pairs have 4 decimal places
-  }
-
-  const handleStopLossChange = value => {
-    const newStopLoss = parseFloat(value)
-    if (tradeType === 'buy' && newStopLoss >= entryPrice) {
-      return // Invalid stop loss for buy - must be below entry
-    }
-    if (tradeType === 'sell' && newStopLoss <= entryPrice) {
-      return // Invalid stop loss for sell - must be above entry
-    }
-    setStopLoss(newStopLoss)
-  }
-
-  const calculateRiskAmount = () => {
-    return accountCapital * (riskPercentage / 100)
+      ? priceDifference * 100
+      : priceDifference * 10000
   }
 
   const calculatePipValue = () => {
     if (!forexRates) return 10
+
+    if (isGold(selectedPair)) {
+      return 10 // $1 per pip for 1 standard lot of gold (100 oz)
+    }
 
     const [baseCurrency, quoteCurrency] = selectedPair.split('/')
     let pipValue = 10 // Default pip value for standard lot
 
     // For JPY pairs
     if (quoteCurrency === 'JPY') {
-      // Get USDJPY rate for conversion
       const usdJpyRate = forexRates['JPY']
 
       if (baseCurrency === 'USD') {
         pipValue = 1000 / usdJpyRate
       } else {
-        // For cross JPY pairs (e.g., GBP/JPY)
         const baseUsdRate = 1 / forexRates[baseCurrency]
         pipValue = (1000 / usdJpyRate) * baseUsdRate
       }
@@ -110,6 +113,21 @@ const ForexCalculator = () => {
     }
 
     return pipValue
+  }
+
+  const handleStopLossChange = value => {
+    const newStopLoss = parseFloat(value)
+    if (tradeType === 'buy' && newStopLoss >= entryPrice) {
+      return // Invalid stop loss for buy - must be below entry
+    }
+    if (tradeType === 'sell' && newStopLoss <= entryPrice) {
+      return // Invalid stop loss for sell - must be above entry
+    }
+    setStopLoss(newStopLoss)
+  }
+
+  const calculateRiskAmount = () => {
+    return accountCapital * (riskPercentage / 100)
   }
 
   const calculatePositionSize = () => {
@@ -203,13 +221,18 @@ const ForexCalculator = () => {
             value={stopLoss}
             onChange={e => handleStopLossChange(e.target.value)}
             className='w-full p-2 border rounded'
-            step='0.00001'
+            step={isGold(selectedPair) ? '0.1' : '0.00001'}
             placeholder={`Enter price (e.g. ${
-              selectedPair.includes('JPY') ? '155.60' : '1.2340'
+              isGold(selectedPair)
+                ? '1950.5'
+                : selectedPair.includes('JPY')
+                ? '155.60'
+                : '1.2340'
             })`}
           />
           <p className='text-sm text-gray-600 mt-1'>
             Distance: {calculatePipDistance().toFixed(1)} pips
+            {isGold(selectedPair) && ' ($0.10 per pip)'}
           </p>
         </div>
 
