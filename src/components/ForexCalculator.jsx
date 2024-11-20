@@ -232,7 +232,7 @@ const ForexCalculator = () => {
           />
           <p className='text-sm text-gray-600 mt-1'>
             Distance: {calculatePipDistance().toFixed(1)} pips
-            {isGold(selectedPair) && ' ($0.10 per pip)'}
+            {isGold(selectedPair) && ' ($1 per pip)'}
           </p>
         </div>
 
