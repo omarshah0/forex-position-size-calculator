@@ -12,7 +12,6 @@ const FOREX_PAIRS = [
 
 const ForexCalculator = () => {
   const [selectedPair, setSelectedPair] = useState('EUR/USD')
-  const [currentPrice, setCurrentPrice] = useState(0)
   const [entryPrice, setEntryPrice] = useState(0)
   const [stopLoss, setStopLoss] = useState(0)
   const [accountCapital, setAccountCapital] = useState(1000)
@@ -21,6 +20,19 @@ const ForexCalculator = () => {
   const [forexRates, setForexRates] = useState(null)
 
   const isGold = pair => pair === 'XAUUSD'
+  const isJpy = pair => pair.includes('JPY')
+
+  const formatPrice = (price, pair) => {
+    if (isGold(pair)) return price.toFixed(2)
+    if (isJpy(pair)) return price.toFixed(3)
+    return price.toFixed(5)
+  }
+
+  const getStepSize = pair => {
+    if (isGold(pair)) return '0.01'
+    if (isJpy(pair)) return '0.001'
+    return '0.00001'
+  }
 
   useEffect(() => {
     fetchForexRates().then(setForexRates)
@@ -34,12 +46,18 @@ const ForexCalculator = () => {
       : calculateCrossRate(forexRates, ...selectedPair.split('/'))
 
     if (rate) {
-      setCurrentPrice(rate)
-      setEntryPrice(rate)
+      const formattedRate = parseFloat(formatPrice(rate, selectedPair))
+      setEntryPrice(formattedRate)
+
+      const pipSize = isGold(selectedPair)
+        ? 1
+        : isJpy(selectedPair)
+        ? 0.01
+        : 0.0001
       setStopLoss(
         tradeType === 'buy'
-          ? rate - (isGold(selectedPair) ? 1 : 0.001)
-          : rate + (isGold(selectedPair) ? 1 : 0.001)
+          ? parseFloat(formatPrice(formattedRate - 10 * pipSize, selectedPair))
+          : parseFloat(formatPrice(formattedRate + 10 * pipSize, selectedPair))
       )
     }
   }, [selectedPair, tradeType, forexRates])
@@ -47,8 +65,8 @@ const ForexCalculator = () => {
   const calculatePipDistance = () => {
     const diff = Math.abs(entryPrice - stopLoss)
     return isGold(selectedPair)
-      ? diff * 10
-      : selectedPair.includes('JPY')
+      ? diff * 100
+      : isJpy(selectedPair)
       ? diff * 100
       : diff * 10000
   }
@@ -57,7 +75,7 @@ const ForexCalculator = () => {
     if (!forexRates) return '0.00'
     const riskAmount = accountCapital * (riskPercentage / 100)
     const pipDistance = calculatePipDistance()
-    const pipValue = isGold(selectedPair) ? 10 : 10
+    const pipValue = isGold(selectedPair) ? 1 : 10
     return (riskAmount / (pipDistance * pipValue)).toFixed(2)
   }
 
@@ -108,7 +126,7 @@ const ForexCalculator = () => {
               value={entryPrice}
               onChange={e => setEntryPrice(parseFloat(e.target.value))}
               className='w-full p-2 border rounded'
-              step={isGold(selectedPair) ? '0.1' : '0.00001'}
+              step={getStepSize(selectedPair)}
             />
           </div>
           <div>
@@ -130,7 +148,7 @@ const ForexCalculator = () => {
               value={stopLoss}
               onChange={e => setStopLoss(parseFloat(e.target.value))}
               className='w-full p-2 border rounded'
-              step={isGold(selectedPair) ? '0.1' : '0.00001'}
+              step={getStepSize(selectedPair)}
             />
           </div>
           <div>
