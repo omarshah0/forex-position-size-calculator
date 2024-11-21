@@ -8,8 +8,6 @@ export const fetchForexRates = async (baseCurrency = 'USD') => {
     )
     const data = await response.json()
 
-    console.log(data)
-
     data.conversion_rates['XAU'] = 1950.25 // Example fixed price
 
     return data.conversion_rates

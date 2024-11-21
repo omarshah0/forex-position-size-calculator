@@ -10,14 +10,55 @@ const FOREX_PAIRS = [
   'USD/CAD',
 ]
 
+// Load initial state from localStorage or use defaults
+const loadInitialState = () => {
+  const savedState = localStorage.getItem('forexCalculator')
+  if (savedState) {
+    return JSON.parse(savedState)
+  }
+  return {
+    selectedPair: 'EUR/USD',
+    entryPrice: 0,
+    stopLoss: 0,
+    accountCapital: 1000,
+    riskPercentage: 1,
+    tradeType: 'buy',
+  }
+}
+
 const ForexCalculator = () => {
-  const [selectedPair, setSelectedPair] = useState('EUR/USD')
-  const [entryPrice, setEntryPrice] = useState(0)
-  const [stopLoss, setStopLoss] = useState(0)
-  const [accountCapital, setAccountCapital] = useState(1000)
-  const [riskPercentage, setRiskPercentage] = useState(1)
-  const [tradeType, setTradeType] = useState('buy')
+  const initialState = loadInitialState()
+  const [selectedPair, setSelectedPair] = useState(initialState.selectedPair)
+  const [entryPrice, setEntryPrice] = useState(initialState.entryPrice)
+  const [stopLoss, setStopLoss] = useState(initialState.stopLoss)
+  const [accountCapital, setAccountCapital] = useState(
+    initialState.accountCapital
+  )
+  const [riskPercentage, setRiskPercentage] = useState(
+    initialState.riskPercentage
+  )
+  const [tradeType, setTradeType] = useState(initialState.tradeType)
   const [forexRates, setForexRates] = useState(null)
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    const stateToSave = {
+      selectedPair,
+      entryPrice,
+      stopLoss,
+      accountCapital,
+      riskPercentage,
+      tradeType,
+    }
+    localStorage.setItem('forexCalculator', JSON.stringify(stateToSave))
+  }, [
+    selectedPair,
+    entryPrice,
+    stopLoss,
+    accountCapital,
+    riskPercentage,
+    tradeType,
+  ])
 
   const isGold = pair => pair === 'XAUUSD'
   const isJpy = pair => pair.includes('JPY')
@@ -68,7 +109,6 @@ const ForexCalculator = () => {
     const newEntryPrice = parseFloat(value)
     setEntryPrice(newEntryPrice)
 
-    // Adjust stop loss if needed based on trade type
     if (tradeType === 'buy' && stopLoss >= newEntryPrice) {
       const newStopLoss = parseFloat(
         formatPrice(newEntryPrice - 10 * getPipSize(selectedPair), selectedPair)
