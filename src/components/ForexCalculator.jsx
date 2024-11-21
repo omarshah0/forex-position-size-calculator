@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react'
 import { fetchForexRates, calculateCrossRate } from '../utils/forexApi'
 
 const FOREX_PAIRS = [
+  'GBP/JPY',
+  'XAUUSD',
+  'USD/JPY',
   'EUR/USD',
   'GBP/USD',
-  'USD/JPY',
-  'GBP/JPY',
   'USD/CAD',
-  'XAUUSD',
 ]
 
 const ForexCalculator = () => {
@@ -34,6 +34,12 @@ const ForexCalculator = () => {
     return '0.00001'
   }
 
+  const getPipSize = pair => {
+    if (isGold(pair)) return 1
+    if (isJpy(pair)) return 0.01
+    return 0.0001
+  }
+
   useEffect(() => {
     fetchForexRates().then(setForexRates)
   }, [])
@@ -49,11 +55,7 @@ const ForexCalculator = () => {
       const formattedRate = parseFloat(formatPrice(rate, selectedPair))
       setEntryPrice(formattedRate)
 
-      const pipSize = isGold(selectedPair)
-        ? 1
-        : isJpy(selectedPair)
-        ? 0.01
-        : 0.0001
+      const pipSize = getPipSize(selectedPair)
       setStopLoss(
         tradeType === 'buy'
           ? parseFloat(formatPrice(formattedRate - 10 * pipSize, selectedPair))
@@ -61,6 +63,24 @@ const ForexCalculator = () => {
       )
     }
   }, [selectedPair, tradeType, forexRates])
+
+  const handleEntryPriceChange = value => {
+    const newEntryPrice = parseFloat(value)
+    setEntryPrice(newEntryPrice)
+
+    // Adjust stop loss if needed based on trade type
+    if (tradeType === 'buy' && stopLoss >= newEntryPrice) {
+      const newStopLoss = parseFloat(
+        formatPrice(newEntryPrice - 10 * getPipSize(selectedPair), selectedPair)
+      )
+      setStopLoss(newStopLoss)
+    } else if (tradeType === 'sell' && stopLoss <= newEntryPrice) {
+      const newStopLoss = parseFloat(
+        formatPrice(newEntryPrice + 10 * getPipSize(selectedPair), selectedPair)
+      )
+      setStopLoss(newStopLoss)
+    }
+  }
 
   const calculatePipDistance = () => {
     const diff = Math.abs(entryPrice - stopLoss)
@@ -124,7 +144,7 @@ const ForexCalculator = () => {
             <input
               type='number'
               value={entryPrice}
-              onChange={e => setEntryPrice(parseFloat(e.target.value))}
+              onChange={e => handleEntryPriceChange(e.target.value)}
               className='w-full p-2 border rounded'
               step={getStepSize(selectedPair)}
             />

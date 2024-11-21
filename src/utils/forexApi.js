@@ -3,11 +3,15 @@ const BASE_URL = 'https://v6.exchangerate-api.com/v6'
 
 export const fetchForexRates = async (baseCurrency = 'USD') => {
   try {
-    const response = await fetch(`${BASE_URL}/${API_KEY}/latest/${baseCurrency}`)
+    const response = await fetch(
+      `${BASE_URL}/${API_KEY}/latest/${baseCurrency}`
+    )
     const data = await response.json()
-    
+
+    console.log(data)
+
     data.conversion_rates['XAU'] = 1950.25 // Example fixed price
-    
+
     return data.conversion_rates
   } catch (error) {
     console.error('Error fetching forex rates:', error)
@@ -27,6 +31,6 @@ export const calculateCrossRate = (rates, fromCurrency, toCurrency) => {
 
   const fromUsdRate = rates[fromCurrency]
   const toUsdRate = rates[toCurrency]
-  
+
   return toUsdRate / fromUsdRate
-} 
+}
