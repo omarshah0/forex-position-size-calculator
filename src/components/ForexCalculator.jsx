@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchForexRates, calculateCrossRate } from '../utils/forexApi'
+import { calculateLotSize } from '../utils/lotSizeCalculator'
 
 const FOREX_PAIRS = [
   'GBP/JPY',
@@ -8,9 +8,9 @@ const FOREX_PAIRS = [
   'EUR/USD',
   'GBP/USD',
   'USD/CAD',
+  'CAD/CHF'
 ]
 
-// Load initial state from localStorage or use defaults
 const loadInitialState = () => {
   const savedState = localStorage.getItem('forexCalculator')
   if (savedState) {
@@ -31,16 +31,12 @@ const ForexCalculator = () => {
   const [selectedPair, setSelectedPair] = useState(initialState.selectedPair)
   const [entryPrice, setEntryPrice] = useState(initialState.entryPrice)
   const [stopLoss, setStopLoss] = useState(initialState.stopLoss)
-  const [accountCapital, setAccountCapital] = useState(
-    initialState.accountCapital
-  )
-  const [riskPercentage, setRiskPercentage] = useState(
-    initialState.riskPercentage
-  )
+  const [accountCapital, setAccountCapital] = useState(initialState.accountCapital)
+  const [riskPercentage, setRiskPercentage] = useState(initialState.riskPercentage)
   const [tradeType, setTradeType] = useState(initialState.tradeType)
-  const [forexRates, setForexRates] = useState(null)
+  const [calculationResult, setCalculationResult] = useState(null)
+  const [isCalculating, setIsCalculating] = useState(false)
 
-  // Save state to localStorage whenever it changes
   useEffect(() => {
     const stateToSave = {
       selectedPair,
@@ -51,23 +47,10 @@ const ForexCalculator = () => {
       tradeType,
     }
     localStorage.setItem('forexCalculator', JSON.stringify(stateToSave))
-  }, [
-    selectedPair,
-    entryPrice,
-    stopLoss,
-    accountCapital,
-    riskPercentage,
-    tradeType,
-  ])
+  }, [selectedPair, entryPrice, stopLoss, accountCapital, riskPercentage, tradeType])
 
   const isGold = pair => pair === 'XAUUSD'
   const isJpy = pair => pair.includes('JPY')
-
-  const formatPrice = (price, pair) => {
-    if (isGold(pair)) return price.toFixed(2)
-    if (isJpy(pair)) return price.toFixed(3)
-    return price.toFixed(5)
-  }
 
   const getStepSize = pair => {
     if (isGold(pair)) return '0.01'
@@ -75,68 +58,20 @@ const ForexCalculator = () => {
     return '0.00001'
   }
 
-  const getPipSize = pair => {
-    if (isGold(pair)) return 1
-    if (isJpy(pair)) return 0.01
-    return 0.0001
-  }
+  const handleCalculate = async () => {
+    setIsCalculating(true)
+    setCalculationResult(null)
 
-  useEffect(() => {
-    fetchForexRates().then(setForexRates)
-  }, [])
+    const result = await calculateLotSize({
+      pair: selectedPair,
+      entryPrice,
+      stopLoss,
+      accountSize: accountCapital,
+      riskPercentage,
+    })
 
-  useEffect(() => {
-    if (!forexRates) return
-
-    let rate = isGold(selectedPair)
-      ? forexRates['XAU']
-      : calculateCrossRate(forexRates, ...selectedPair.split('/'))
-
-    if (rate) {
-      const formattedRate = parseFloat(formatPrice(rate, selectedPair))
-      setEntryPrice(formattedRate)
-
-      const pipSize = getPipSize(selectedPair)
-      setStopLoss(
-        tradeType === 'buy'
-          ? parseFloat(formatPrice(formattedRate - 10 * pipSize, selectedPair))
-          : parseFloat(formatPrice(formattedRate + 10 * pipSize, selectedPair))
-      )
-    }
-  }, [selectedPair, tradeType, forexRates])
-
-  const handleEntryPriceChange = value => {
-    const newEntryPrice = parseFloat(value)
-    setEntryPrice(newEntryPrice)
-
-    if (tradeType === 'buy' && stopLoss >= newEntryPrice) {
-      const newStopLoss = parseFloat(
-        formatPrice(newEntryPrice - 10 * getPipSize(selectedPair), selectedPair)
-      )
-      setStopLoss(newStopLoss)
-    } else if (tradeType === 'sell' && stopLoss <= newEntryPrice) {
-      const newStopLoss = parseFloat(
-        formatPrice(newEntryPrice + 10 * getPipSize(selectedPair), selectedPair)
-      )
-      setStopLoss(newStopLoss)
-    }
-  }
-
-  const calculatePipDistance = () => {
-    const diff = Math.abs(entryPrice - stopLoss)
-    return isGold(selectedPair)
-      ? diff * 100
-      : isJpy(selectedPair)
-      ? diff * 100
-      : diff * 10000
-  }
-
-  const calculatePositionSize = () => {
-    if (!forexRates) return '0.00'
-    const riskAmount = accountCapital * (riskPercentage / 100)
-    const pipDistance = calculatePipDistance()
-    const pipValue = isGold(selectedPair) ? 1 : 10
-    return (riskAmount / (pipDistance * pipValue)).toFixed(2)
+    setCalculationResult(result)
+    setIsCalculating(false)
   }
 
   return (
@@ -149,9 +84,7 @@ const ForexCalculator = () => {
             onChange={e => setSelectedPair(e.target.value)}
           >
             {FOREX_PAIRS.map(pair => (
-              <option key={pair} value={pair}>
-                {pair}
-              </option>
+              <option key={pair} value={pair}>{pair}</option>
             ))}
           </select>
           <div className='flex gap-2 bg-gray-100 p-1 rounded'>
@@ -184,7 +117,7 @@ const ForexCalculator = () => {
             <input
               type='number'
               value={entryPrice}
-              onChange={e => handleEntryPriceChange(e.target.value)}
+              onChange={e => setEntryPrice(parseFloat(e.target.value))}
               className='w-full p-2 border rounded'
               step={getStepSize(selectedPair)}
             />
@@ -225,22 +158,53 @@ const ForexCalculator = () => {
           </div>
         </div>
 
-        <div className='col-span-2 bg-gray-100 p-3 rounded flex justify-between items-center'>
-          <div>
-            <div className='text-sm text-gray-600'>Risk Amount</div>
-            <div className='font-bold'>
-              ${(accountCapital * (riskPercentage / 100)).toFixed(2)}
-            </div>
+        <button
+          onClick={handleCalculate}
+          disabled={isCalculating}
+          className='col-span-2 p-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-blue-300'
+        >
+          {isCalculating ? 'Calculating...' : 'Calculate'}
+        </button>
+
+        {calculationResult && (
+          <div className='col-span-2 bg-gray-100 p-3 rounded'>
+            {calculationResult.success ? (
+              <div className='space-y-3'>
+                <div className='flex justify-between items-center'>
+                  <div>
+                    <div className='text-sm text-gray-600'>Risk Amount</div>
+                    <div className='font-bold'>${calculationResult.riskAmount}</div>
+                  </div>
+                  <div>
+                    <div className='text-sm text-gray-600'>Position Size</div>
+                    <div className='font-bold'>{calculationResult.lotSize} Lots</div>
+                  </div>
+                  <div>
+                    <div className='text-sm text-gray-600'>Pips</div>
+                    <div className='font-bold'>{calculationResult.pips}</div>
+                  </div>
+                </div>
+                
+                {(calculationResult.conversionInfo.baseRate || calculationResult.conversionInfo.rate) && (
+                  <div className='text-sm text-gray-600 border-t pt-2 mt-2'>
+                    <div className='font-medium mb-1'>Conversion Rates Used:</div>
+                    {calculationResult.conversionInfo.rate && (
+                      <div>{calculationResult.conversionInfo.rate}</div>
+                    )}
+                    {calculationResult.conversionInfo.baseRate && (
+                      <div>{calculationResult.conversionInfo.baseRate}</div>
+                    )}
+                    {calculationResult.conversionInfo.quoteRate && (
+                      <div>{calculationResult.conversionInfo.quoteRate}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className='text-red-500'>{calculationResult.error}</div>
+            )}
           </div>
-          <div>
-            <div className='text-sm text-gray-600'>Position Size</div>
-            <div className='font-bold'>{calculatePositionSize()} Lots</div>
-          </div>
-          <div>
-            <div className='text-sm text-gray-600'>Pips</div>
-            <div className='font-bold'>{calculatePipDistance().toFixed(1)}</div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   )
